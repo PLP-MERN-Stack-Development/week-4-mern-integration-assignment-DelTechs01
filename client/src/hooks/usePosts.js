@@ -1,6 +1,9 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
 
+// If not using Vite proxy, ensure baseURL is set
+axios.defaults.baseURL = 'http://localhost:5000/api'; // Uncomment if not using proxy
+
 export function usePosts(page, search, category) {
   const [posts, setPosts] = useState([]);
   const [total, setTotal] = useState(0);
@@ -13,11 +16,12 @@ export function usePosts(page, search, category) {
       setLoading(true);
       try {
         const { data } = await axios.get(`/posts?page=${page}&search=${search}&category=${category}`);
-        setPosts(data.posts);
-        setTotal(data.total);
+        setPosts(Array.isArray(data.posts) ? data.posts : []);
+        setTotal(data.total || 0);
         setError(null);
       } catch (err) {
         setError(err.response?.data?.error || 'Error fetching posts');
+        setPosts([]);
       } finally {
         setLoading(false);
       }
@@ -26,9 +30,12 @@ export function usePosts(page, search, category) {
     const fetchCategories = async () => {
       try {
         const { data } = await axios.get('/categories');
-        setCategories(data);
+        console.log('Categories response:', data); // Debug
+        setCategories(Array.isArray(data) ? data : []);
+        setError(null);
       } catch (err) {
         setError(err.response?.data?.error || 'Error fetching categories');
+        setCategories([]);
       }
     };
 
@@ -45,7 +52,6 @@ export function usePost(id) {
   const [error, setError] = useState(null);
 
   useEffect(() => {
-    if (!id) return;
     const fetchPost = async () => {
       setLoading(true);
       try {
@@ -58,62 +64,62 @@ export function usePost(id) {
         setLoading(false);
       }
     };
-    fetchPost();
+    if (id) fetchPost();
   }, [id]);
 
-  const createPost = async (data) => {
-    setLoading(true);
+  const createPost = async (formData) => {
     try {
-      const { data: newPost } = await axios.post('/posts', data);
-      setPost(newPost);
+      const { data } = await axios.post('/posts', formData);
       setError(null);
+      return data;
     } catch (err) {
       setError(err.response?.data?.error || 'Error creating post');
-    } finally {
-      setLoading(false);
+      throw err;
     }
   };
 
-  const updatePost = async (id, data) => {
-    setLoading(true);
+  const updatePost = async (id, formData) => {
     try {
-      const { data: updatedPost } = await axios.put(`/posts/${id}`, data);
-      setPost(updatedPost);
+      const { data } = await axios.put(`/posts/${id}`, formData);
+      setPost(data);
       setError(null);
+      return data;
     } catch (err) {
       setError(err.response?.data?.error || 'Error updating post');
-    } finally {
-      setLoading(false);
+      throw err;
     }
   };
 
   const addComment = async (content) => {
     try {
       const { data } = await axios.post(`/posts/${id}/comments`, { content });
-      setPost({ ...post, comments: [...post.comments, data] });
+      setPost(data);
       setError(null);
     } catch (err) {
       setError(err.response?.data?.error || 'Error adding comment');
     }
   };
 
-  return { post, createPost, updatePost, addComment, loading, error };
+  return { post, loading, error, createPost, updatePost, addComment };
 }
 
 export function useCategories() {
   const [categories, setCategories] = useState([]);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     const fetchCategories = async () => {
       try {
         const { data } = await axios.get('/categories');
-        setCategories(data);
+        setCategories(Array.isArray(data) ? data : []);
+        setError(null);
       } catch (err) {
-        console.error(err.response?.data?.error || 'Error fetching categories');
+        setError(err.response?.data?.error || 'Error fetching categories');
+        setCategories([]);
       }
     };
     fetchCategories();
   }, []);
 
-  return { categories };
+  return { categories, error };
 }
